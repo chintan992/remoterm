@@ -11,6 +11,15 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.agent/
+.idea/
+.gemini/
+.cline/
+.clinerules/
+.kilocode/
+.opencode/
+.qwen/
+openspec/
 
 # IntelliJ related
 *.iml
