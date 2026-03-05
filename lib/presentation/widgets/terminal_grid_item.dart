@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:xterm/xterm.dart';
 
+import '../../core/render_scheduler.dart';
 import '../../models/workspace.dart';
 import '../../providers/ui_state_provider.dart';
 import '../../services/local_terminal_service.dart';
@@ -29,34 +30,52 @@ class TerminalGridItem extends ConsumerStatefulWidget {
 class _TerminalGridItemState extends ConsumerState<TerminalGridItem> {
   late Terminal _terminal;
   late LocalTerminalService _terminalService;
+  late RenderScheduler _renderScheduler;
   final FocusNode _focusNode = FocusNode();
   bool _isInitialized = false;
+  StreamSubscription? _stdoutSubscription;
+  StreamSubscription? _stderrSubscription;
 
   @override
   void initState() {
     super.initState();
     _terminal = Terminal(maxLines: 1000);
+    _renderScheduler = RenderScheduler(_terminal);
     _terminalService = LocalTerminalService();
     _startTerminal();
   }
 
   @override
   void dispose() {
+    _stdoutSubscription?.cancel();
+    _stderrSubscription?.cancel();
     _terminalService.dispose();
     _focusNode.dispose();
     super.dispose();
   }
 
   Future<void> _startTerminal() async {
+    final uiState = ref.read(uiStateProvider);
+
     try {
-      await _terminalService.start(widget.cubicle.path);
-      
-      _terminalService.stdout.listen((data) {
-        _terminal.write(utf8.decode(data));
+      await _terminalService.start(
+        widget.cubicle.path,
+        sessionId: widget.cubicle.id.replaceAll('-', ''),
+        launchCommand: widget.cubicle.launchCommand,
+        windowsShell: uiState.windowsShell,
+      );
+
+      _stdoutSubscription = _terminalService.stdout.listen((data) {
+        _renderScheduler.feed(utf8.decode(data));
       });
-      
+
+      _stderrSubscription = _terminalService.stderr.listen((data) {
+        _renderScheduler.feed(utf8.decode(data));
+      });
+
       _terminal.onOutput = (data) {
         _terminalService.write(data);
+        _renderScheduler.flushNow(); // Instant feedback for typing
       };
 
       if (mounted) {
@@ -89,8 +108,8 @@ class _TerminalGridItemState extends ConsumerState<TerminalGridItem> {
                   child: Text(
                     widget.cubicle.name,
                     style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -131,15 +150,20 @@ class _TerminalGridItemState extends ConsumerState<TerminalGridItem> {
                 return KeyEventResult.ignored;
               },
               child: !_isInitialized
-                  ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : TerminalView(
                       _terminal,
-                      theme: XTermThemeConverter.getXTermTheme(uiState.defaultTerminalTheme),
+                      theme: XTermThemeConverter.getXTermTheme(
+                        uiState.defaultTerminalTheme,
+                      ),
                       textStyle: TerminalStyle(
-                        fontSize: uiState.terminalFontSize * 0.8, // Slightly smaller for grid
+                        fontSize:
+                            uiState.terminalFontSize *
+                            0.8, // Slightly smaller for grid
                         fontFamily: uiState.defaultFontFamily,
                       ),
-                      autoFocus: false,
                     ),
             ),
           ),

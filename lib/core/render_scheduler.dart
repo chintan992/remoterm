@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/scheduler.dart';
 import 'package:xterm/xterm.dart';
 

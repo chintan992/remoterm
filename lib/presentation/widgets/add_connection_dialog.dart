@@ -40,6 +40,8 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
   String? _selectedTerminalTheme;
   List<String> _selectedQuickActions = List.from(defaultQuickActions);
   bool _showNewGroupField = false;
+  RemoteShell _selectedRemoteShell = RemoteShell.bash;
+  bool _isLoadingCredentials = false;
 
   bool get isEditing => widget.connection != null;
 
@@ -64,6 +66,45 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
     _selectedQuickActions = conn?.quickActions != null
         ? List.from(conn!.quickActions)
         : List.from(defaultQuickActions);
+    _selectedRemoteShell = conn?.remoteShell ?? RemoteShell.bash;
+
+    if (isEditing) {
+      _loadSavedCredentials();
+    }
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    setState(() {
+      _isLoadingCredentials = true;
+    });
+
+    try {
+      final secureStorage = ref.read(secureStorageServiceProvider);
+      final id = widget.connection!.id;
+
+      final password = await secureStorage.getCredential(id);
+      if (password != null && password.isNotEmpty) {
+        _passwordController.text = password;
+      }
+
+      final privateKey = await secureStorage.getPrivateKey(id);
+      if (privateKey != null && privateKey.isNotEmpty) {
+        _privateKeyController.text = privateKey;
+      }
+
+      final passphrase = await secureStorage.getPassphrase(id);
+      if (passphrase != null && passphrase.isNotEmpty) {
+        _passphraseController.text = passphrase;
+      }
+    } catch (e) {
+      debugPrint('Failed to load saved credentials: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingCredentials = false;
+        });
+      }
+    }
   }
 
   @override
@@ -87,193 +128,204 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
         width: double.maxFinite,
         child: Form(
           key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Connection Name',
-                    hintText: 'My Server',
-                    prefixIcon: Icon(Icons.label),
+          child: _isLoadingCredentials
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(32.0),
+                    child: CircularProgressIndicator(),
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                _buildGroupSelector(),
-                const SizedBox(height: 16),
-                _buildTerminalThemeSelector(),
-                const SizedBox(height: 16),
-                _buildQuickActionsSelector(),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: TextFormField(
-                        controller: _hostController,
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: _nameController,
                         decoration: const InputDecoration(
-                          labelText: 'Host',
-                          hintText: '192.168.1.1',
-                          prefixIcon: Icon(Icons.computer),
+                          labelText: 'Connection Name',
+                          hintText: 'My Server',
+                          prefixIcon: Icon(Icons.label),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Enter host';
+                            return 'Please enter a name';
                           }
                           return null;
                         },
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _portController,
-                        decoration: const InputDecoration(labelText: 'Port'),
-                        keyboardType: TextInputType.number,
+                      const SizedBox(height: 16),
+                      _buildGroupSelector(),
+                      const SizedBox(height: 16),
+                      _buildTerminalThemeSelector(),
+                      const SizedBox(height: 16),
+                      _buildQuickActionsSelector(),
+                      const SizedBox(height: 16),
+                      _buildRemoteShellSelector(),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 3,
+                            child: TextFormField(
+                              controller: _hostController,
+                              decoration: const InputDecoration(
+                                labelText: 'Host',
+                                hintText: '192.168.1.1',
+                                prefixIcon: Icon(Icons.computer),
+                              ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Enter host';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextFormField(
+                              controller: _portController,
+                              decoration: const InputDecoration(
+                                labelText: 'Port',
+                              ),
+                              keyboardType: TextInputType.number,
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Port';
+                                }
+                                final port = int.tryParse(value);
+                                if (port == null || port < 1 || port > 65535) {
+                                  return 'Invalid';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _usernameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Username',
+                          hintText: 'root',
+                          prefixIcon: Icon(Icons.person),
+                        ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
-                            return 'Port';
-                          }
-                          final port = int.tryParse(value);
-                          if (port == null || port < 1 || port > 65535) {
-                            return 'Invalid';
+                            return 'Please enter a username';
                           }
                           return null;
                         },
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Username',
-                    hintText: 'root',
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                SegmentedButton<AuthMethod>(
-                  segments: const [
-                    ButtonSegment(
-                      value: AuthMethod.password,
-                      label: Text('Password'),
-                      icon: Icon(Icons.password),
-                    ),
-                    ButtonSegment(
-                      value: AuthMethod.privateKey,
-                      label: Text('Private Key'),
-                      icon: Icon(Icons.key),
-                    ),
-                  ],
-                  selected: {_authMethod},
-                  onSelectionChanged: (Set<AuthMethod> newSelection) {
-                    setState(() {
-                      _authMethod = newSelection.first;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-                if (_authMethod == AuthMethod.password) ...[
-                  TextFormField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                        ),
-                        onPressed: () {
+                      const SizedBox(height: 16),
+                      SegmentedButton<AuthMethod>(
+                        segments: const [
+                          ButtonSegment(
+                            value: AuthMethod.password,
+                            label: Text('Password'),
+                            icon: Icon(Icons.password),
+                          ),
+                          ButtonSegment(
+                            value: AuthMethod.privateKey,
+                            label: Text('Private Key'),
+                            icon: Icon(Icons.key),
+                          ),
+                        ],
+                        selected: {_authMethod},
+                        onSelectionChanged: (Set<AuthMethod> newSelection) {
                           setState(() {
-                            _obscurePassword = !_obscurePassword;
+                            _authMethod = newSelection.first;
                           });
                         },
                       ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  CheckboxListTile(
-                    title: const Text('Save Password'),
-                    value: _savePassword,
-                    onChanged: (value) {
-                      setState(() {
-                        _savePassword = value ?? false;
-                      });
-                    },
-                    controlAffinity: ListTileControlAffinity.leading,
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                ] else ...[
-                  TextFormField(
-                    controller: _privateKeyController,
-                    maxLines: 3,
-                    decoration: InputDecoration(
-                      labelText: 'Private Key',
-                      hintText: 'Paste private key here...',
-                      alignLabelWithHint: true,
-                      suffixIcon: IconButton(
-                        icon: const Icon(Icons.file_upload),
-                        onPressed: _pickPrivateKey,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passphraseController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Passphrase (optional)',
-                      prefixIcon: Icon(Icons.lock),
-                    ),
-                  ),
-                ],
-                if (_testResult != null) ...[
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: _testResult!.startsWith('Success')
-                          ? Colors.green.shade100
-                          : Colors.red.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _testResult!.startsWith('Success')
-                              ? Icons.check_circle
-                              : Icons.error,
-                          color: _testResult!.startsWith('Success')
-                              ? Colors.green
-                              : Colors.red,
+                      const SizedBox(height: 16),
+                      if (_authMethod == AuthMethod.password) ...[
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                              onPressed: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
+                                });
+                              },
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(_testResult!)),
+                        const SizedBox(height: 8),
+                        CheckboxListTile(
+                          title: const Text('Save Password'),
+                          value: _savePassword,
+                          onChanged: (value) {
+                            setState(() {
+                              _savePassword = value ?? false;
+                            });
+                          },
+                          controlAffinity: ListTileControlAffinity.leading,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ] else ...[
+                        TextFormField(
+                          controller: _privateKeyController,
+                          maxLines: 3,
+                          decoration: InputDecoration(
+                            labelText: 'Private Key',
+                            hintText: 'Paste private key here...',
+                            alignLabelWithHint: true,
+                            suffixIcon: IconButton(
+                              icon: const Icon(Icons.file_upload),
+                              onPressed: _pickPrivateKey,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _passphraseController,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Passphrase (optional)',
+                            prefixIcon: Icon(Icons.lock),
+                          ),
+                        ),
                       ],
-                    ),
+                      if (_testResult != null) ...[
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _testResult!.startsWith('Success')
+                                ? Colors.green.shade100
+                                : Colors.red.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                _testResult!.startsWith('Success')
+                                    ? Icons.check_circle
+                                    : Icons.error,
+                                color: _testResult!.startsWith('Success')
+                                    ? Colors.green
+                                    : Colors.red,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(_testResult!)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-              ],
-            ),
-          ),
+                ),
         ),
       ),
       actions: [
@@ -281,19 +333,20 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('Cancel'),
         ),
-        if (!isEditing)
-          TextButton(
-            onPressed: _isTesting ? null : _testConnection,
-            child: _isTesting
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Test'),
-          ),
+        TextButton(
+          onPressed: (_isTesting || _isLoadingCredentials)
+              ? null
+              : _testConnection,
+          child: _isTesting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Test'),
+        ),
         ElevatedButton(
-          onPressed: _saveConnection,
+          onPressed: _isLoadingCredentials ? null : _saveConnection,
           child: Text(isEditing ? 'Update' : 'Save'),
         ),
       ],
@@ -403,6 +456,7 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
       terminalTheme: _selectedTerminalTheme,
       lastConnected: widget.connection?.lastConnected,
       isConnected: widget.connection?.isConnected ?? false,
+      remoteShell: _selectedRemoteShell,
     );
   }
 
@@ -589,6 +643,27 @@ class _AddConnectionDialogState extends ConsumerState<AddConnectionDialog> {
         setState(() {
           _selectedTerminalTheme = value == '' ? null : value;
         });
+      },
+    );
+  }
+
+  Widget _buildRemoteShellSelector() {
+    return DropdownButtonFormField<RemoteShell>(
+      initialValue: _selectedRemoteShell,
+      decoration: const InputDecoration(
+        labelText: 'Remote Shell',
+        prefixIcon: Icon(Icons.terminal),
+        helperText: 'Shell to use on the remote server',
+      ),
+      items: RemoteShell.values.map((shell) {
+        return DropdownMenuItem(value: shell, child: Text(shell.displayName));
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _selectedRemoteShell = value;
+          });
+        }
       },
     );
   }

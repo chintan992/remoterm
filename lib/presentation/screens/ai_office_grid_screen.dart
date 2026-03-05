@@ -1,3 +1,4 @@
+import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,14 +22,19 @@ class _AiOfficeGridScreenState extends ConsumerState<AiOfficeGridScreen> {
   @override
   Widget build(BuildContext context) {
     // Re-fetch office from state to get updated cubicle list
-    final office = ref.watch(workspaceProvider).offices.firstWhere(
+    final office = ref
+        .watch(workspaceProvider)
+        .offices
+        .firstWhere(
           (o) => o.id == widget.office.id,
           orElse: () => widget.office,
         );
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Office: ${office.mainProjectPath.split(Platform.pathSeparator).last}'),
+        title: Text(
+          'Office: ${office.mainProjectPath.split(Platform.pathSeparator).last}',
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_box_outlined),
@@ -50,8 +56,15 @@ class _AiOfficeGridScreenState extends ConsumerState<AiOfficeGridScreen> {
               itemCount: _activeCubicleIds.length,
               itemBuilder: (context, index) {
                 final cubicleId = _activeCubicleIds[index];
-                final cubicle = office.cubicles.firstWhere((c) => c.id == cubicleId);
-                
+                final cubicle = office.cubicles
+                    .where((c) => c.id == cubicleId)
+                    .firstOrNull;
+
+                if (cubicle == null) {
+                  // Cubicle was deleted while grid is open
+                  return const SizedBox.shrink();
+                }
+
                 return TerminalGridItem(
                   cubicle: cubicle,
                   onClose: () {
@@ -63,7 +76,8 @@ class _AiOfficeGridScreenState extends ConsumerState<AiOfficeGridScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => CubicleTerminalScreen(cubicle: cubicle),
+                        builder: (context) =>
+                            CubicleTerminalScreen(cubicle: cubicle),
                       ),
                     );
                   },
@@ -102,36 +116,36 @@ class _AiOfficeGridScreenState extends ConsumerState<AiOfficeGridScreen> {
             children: [
               const Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text('Select Cubicle to Launch', style: TextStyle(fontWeight: FontWeight.bold)),
+                child: Text(
+                  'Select Cubicle to Launch',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
               ),
               if (office.cubicles.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(16.0),
-                  child: Text('No cubicles created yet. Create one in the Office view.'),
+                  child: Text(
+                    'No cubicles created yet. Create one in the Office view.',
+                  ),
                 ),
-              ...office.cubicles.map((c) => ListTile(
-                    leading: const Icon(Icons.sensor_door_outlined),
-                    title: Text(c.name),
-                    onTap: () {
-                      setState(() {
-                        if (!_activeCubicleIds.contains(c.id)) {
-                          _activeCubicleIds.add(c.id);
-                        }
-                      });
-                      Navigator.pop(context);
-                    },
-                  )),
+              ...office.cubicles.map(
+                (c) => ListTile(
+                  leading: const Icon(Icons.sensor_door_outlined),
+                  title: Text(c.name),
+                  onTap: () {
+                    setState(() {
+                      if (!_activeCubicleIds.contains(c.id)) {
+                        _activeCubicleIds.add(c.id);
+                      }
+                    });
+                    Navigator.pop(context);
+                  },
+                ),
+              ),
             ],
           ),
         );
       },
     );
   }
-}
-
-// Global Platform check helper
-class Platform {
-  static String get pathSeparator => (const bool.fromEnvironment('dart.library.io')) 
-      ? (Uri.base.scheme == 'file' ? (Uri.base.path.contains(':') ? '\\' : '/') : '/') 
-      : '/';
 }

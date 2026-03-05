@@ -18,6 +18,8 @@ class _AddCubicleDialogState extends State<AddCubicleDialog> {
     'Claude Code': 'claude dev',
     'Ollama (Llama3)': 'ollama run llama3',
     'Aider': 'aider',
+    'Opencode': 'opencode',
+    'Kilocode': 'kilocode',
     'Git Status': 'git status',
   };
 
@@ -47,13 +49,10 @@ class _AddCubicleDialogState extends State<AddCubicleDialog> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedPreset,
+              initialValue: _selectedPreset,
               decoration: const InputDecoration(labelText: 'AI Tool Preset'),
               items: _presets.keys.map((String key) {
-                return DropdownMenuItem<String>(
-                  value: key,
-                  child: Text(key),
-                );
+                return DropdownMenuItem<String>(value: key, child: Text(key));
               }).toList(),
               onChanged: (value) {
                 if (value != null) {
@@ -77,7 +76,9 @@ class _AddCubicleDialogState extends State<AddCubicleDialog> {
             const SizedBox(height: 8),
             Text(
               'This command will be injected into the terminal stdin upon startup.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey),
             ),
           ],
         ),

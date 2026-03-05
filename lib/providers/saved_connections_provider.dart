@@ -9,9 +9,9 @@ import '../models/connection.dart';
 class StorageException implements Exception {
   final String message;
   final dynamic cause;
-  
+
   StorageException(this.message, [this.cause]);
-  
+
   @override
   String toString() => message;
 }
@@ -22,9 +22,9 @@ final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
 
 final savedConnectionsProvider =
     StateNotifierProvider<SavedConnectionsNotifier, List<Connection>>((ref) {
-  final prefs = ref.watch(sharedPreferencesProvider);
-  return SavedConnectionsNotifier(prefs);
-});
+      final prefs = ref.watch(sharedPreferencesProvider);
+      return SavedConnectionsNotifier(prefs);
+    });
 
 class SavedConnectionsNotifier extends StateNotifier<List<Connection>> {
   static const String _storageKey = 'saved_connections';
@@ -73,14 +73,16 @@ class SavedConnectionsNotifier extends StateNotifier<List<Connection>> {
   }
 
   Future<bool> updateConnection(Connection connection) async {
+    final previousState = state;
     try {
       state = [
         for (final c in state)
-          if (c.id == connection.id) connection else c
+          if (c.id == connection.id) connection else c,
       ];
       await _saveConnections();
       return true;
     } catch (e) {
+      state = previousState;
       debugPrint('Error updating connection: $e');
       return false;
     }
@@ -125,14 +127,14 @@ class SavedConnectionsNotifier extends StateNotifier<List<Connection>> {
       final group = connection.group;
       grouped.putIfAbsent(group, () => []).add(connection);
     }
-    
+
     final sortedKeys = grouped.keys.toList()
       ..sort((a, b) {
         if (a == 'Uncategorized') return 1;
         if (b == 'Uncategorized') return -1;
         return a.compareTo(b);
       });
-    
+
     return {for (var key in sortedKeys) key: grouped[key]!};
   }
 }

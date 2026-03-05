@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'dart:io' show Platform;
 
 import '../../models/workspace.dart';
 import '../../providers/workspace_provider.dart';
-import 'terminal_screen.dart'; // We'll need to adapt this or create a LocalTerminalScreen
+import 'cubicle_terminal_screen.dart';
+import 'ai_office_grid_screen.dart';
+import '../widgets/add_cubicle_dialog.dart';
 
 class WorkspaceScreen extends ConsumerWidget {
   const WorkspaceScreen({super.key});
@@ -57,27 +59,59 @@ class WorkspaceScreen extends ConsumerWidget {
       itemCount: offices.length,
       itemBuilder: (context, index) {
         final office = offices[index];
+        final projectName = office.mainProjectPath.split(Platform.pathSeparator).last;
+        
         return ExpansionTile(
           leading: const Icon(Icons.folder_special),
-          title: Text(office.mainProjectPath.split(Platform.pathSeparator).last),
+          title: Text(projectName),
           subtitle: Text(office.mainProjectPath),
+          initiallyExpanded: true,
+          trailing: IconButton(
+            icon: const Icon(Icons.grid_view),
+            tooltip: 'Open Office Grid',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AiOfficeGridScreen(office: office),
+                ),
+              );
+            },
+          ),
           children: [
             ...office.cubicles.map((cubicle) => ListTile(
                   leading: const Icon(Icons.sensor_door_outlined),
                   title: Text(cubicle.name),
-                  subtitle: Text('Created: ${cubicle.createdAt.toString().split('.').first}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _handleDeleteCubicle(context, ref, office, cubicle),
+                  subtitle: Text(cubicle.launchCommand != null && cubicle.launchCommand!.isNotEmpty
+                    ? 'AI Tool: ${cubicle.launchCommand}' 
+                    : 'Created: ${cubicle.createdAt.toString().split('.').first}'),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.sync_alt, color: Colors.green),
+                        tooltip: 'Sync Changes to Main Project',
+                        onPressed: () => _handleSyncCubicle(context, ref, office, cubicle),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _handleDeleteCubicle(context, ref, office, cubicle),
+                      ),
+                    ],
                   ),
                   onTap: () {
-                    // TODO: Open local terminal in cubicle.path
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => CubicleTerminalScreen(cubicle: cubicle),
+                      ),
+                    );
                   },
                 )),
             ListTile(
               leading: const Icon(Icons.add, color: Colors.blue),
               title: const Text('New Cubicle', style: TextStyle(color: Colors.blue)),
-              onTap: () => _handleCreateCubicle(context, ref, office),
+              onTap: () => _handleCreateCubicle(context, ref, office, projectName),
             ),
           ],
         );
@@ -93,29 +127,44 @@ class WorkspaceScreen extends ConsumerWidget {
     }
   }
 
-  Future<void> _handleCreateCubicle(BuildContext context, WidgetRef ref, AiOffice office) async {
-    final controller = TextEditingController();
-    final name = await showDialog<String>(
+  Future<void> _handleCreateCubicle(BuildContext context, WidgetRef ref, AiOffice office, String projectName) async {
+    final result = await showDialog<Map<String, String>>(
+      context: context,
+      builder: (context) => AddCubicleDialog(projectName: projectName),
+    );
+
+    if (result != null && result['name'] != null && result['name']!.isNotEmpty) {
+      await ref.read(workspaceProvider.notifier).createCubicle(
+        office, 
+        result['name']!, 
+        launchCommand: result['command'],
+      );
+    }
+  }
+
+  Future<void> _handleSyncCubicle(BuildContext context, WidgetRef ref, AiOffice office, Cubicle cubicle) async {
+    final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New Cubicle Name'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(hintText: 'e.g., bugfix-auth, refactor-ui'),
-          autofocus: true,
-        ),
+        title: const Text('Sync Changes?'),
+        content: Text('This will overwrite the main project files at ${office.mainProjectPath} with changes from this cubicle.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
-            onPressed: () => Navigator.pop(context, controller.text),
-            child: const Text('Create'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sync Now', style: TextStyle(color: Colors.green)),
           ),
         ],
       ),
     );
 
-    if (name != null && name.isNotEmpty) {
-      await ref.read(workspaceProvider.notifier).createCubicle(office, name);
+    if (confirm == true) {
+      await ref.read(workspaceProvider.notifier).syncCubicle(office, cubicle);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Successfully synced ${cubicle.name} to main project')),
+        );
+      }
     }
   }
 

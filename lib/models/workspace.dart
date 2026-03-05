@@ -13,6 +13,7 @@ class Cubicle {
   final DateTime createdAt;
   final CubicleStatus status;
   final String? lastCommand;
+  final String? launchCommand; // New field for AI command injection
 
   Cubicle({
     String? id,
@@ -21,6 +22,7 @@ class Cubicle {
     DateTime? createdAt,
     this.status = CubicleStatus.active,
     this.lastCommand,
+    this.launchCommand,
   })  : id = id ?? const Uuid().v4(),
         createdAt = createdAt ?? DateTime.now();
 
@@ -31,6 +33,7 @@ class Cubicle {
     DateTime? createdAt,
     CubicleStatus? status,
     String? lastCommand,
+    String? launchCommand,
   }) {
     return Cubicle(
       id: id ?? this.id,
@@ -39,6 +42,7 @@ class Cubicle {
       createdAt: createdAt ?? this.createdAt,
       status: status ?? this.status,
       lastCommand: lastCommand ?? this.lastCommand,
+      launchCommand: launchCommand ?? this.launchCommand,
     );
   }
 
@@ -50,6 +54,7 @@ class Cubicle {
       'createdAt': createdAt.toIso8601String(),
       'status': status.name,
       'lastCommand': lastCommand,
+      'launchCommand': launchCommand,
     };
   }
 
@@ -64,6 +69,7 @@ class Cubicle {
         orElse: () => CubicleStatus.active,
       ),
       lastCommand: json['lastCommand'] as String?,
+      launchCommand: json['launchCommand'] as String?,
     );
   }
 }

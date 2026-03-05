@@ -7,6 +7,7 @@ class ConnectionContextMenu extends StatelessWidget {
   final VoidCallback onReconnect;
   final VoidCallback onDetails;
   final VoidCallback onEdit;
+  final VoidCallback onSftp;
   final VoidCallback onDuplicate;
   final VoidCallback onDelete;
 
@@ -16,6 +17,7 @@ class ConnectionContextMenu extends StatelessWidget {
     required this.onReconnect,
     required this.onDetails,
     required this.onEdit,
+    required this.onSftp,
     required this.onDuplicate,
     required this.onDelete,
   });
@@ -26,6 +28,7 @@ class ConnectionContextMenu extends StatelessWidget {
     required VoidCallback onReconnect,
     required VoidCallback onDetails,
     required VoidCallback onEdit,
+    required VoidCallback onSftp,
     required VoidCallback onDuplicate,
     required VoidCallback onDelete,
   }) {
@@ -36,6 +39,7 @@ class ConnectionContextMenu extends StatelessWidget {
         onReconnect: onReconnect,
         onDetails: onDetails,
         onEdit: onEdit,
+        onSftp: onSftp,
         onDuplicate: onDuplicate,
         onDelete: onDelete,
       ),
@@ -76,13 +80,13 @@ class ConnectionContextMenu extends StatelessWidget {
                       children: [
                         Text(
                           connection.name,
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         Text(
                           '${connection.username}@${connection.host}:${connection.port}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
                                 color: Theme.of(context).colorScheme.outline,
                               ),
                         ),
@@ -118,6 +122,15 @@ class ConnectionContextMenu extends StatelessWidget {
               onTap: () {
                 Navigator.pop(context);
                 onEdit();
+              },
+            ),
+            _buildMenuItem(
+              context,
+              icon: Icons.folder_open,
+              label: 'SFTP Browser',
+              onTap: () {
+                Navigator.pop(context);
+                onSftp();
               },
             ),
             _buildMenuItem(
@@ -158,10 +171,7 @@ class ConnectionContextMenu extends StatelessWidget {
 
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(
-        label,
-        style: TextStyle(color: color),
-      ),
+      title: Text(label, style: TextStyle(color: color)),
       onTap: onTap,
     );
   }
